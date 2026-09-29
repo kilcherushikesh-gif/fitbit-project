@@ -11,6 +11,7 @@ ENV/
 .streamlit/
 *.db
 *.sqlite3
+!fitbit.db
 
 # Data and generated artifacts
 exports/
