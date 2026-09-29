@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+
+# Streamlit / local app state
+.streamlit/
+*.db
+*.sqlite3
+
+# Data and generated artifacts
+exports/
+charts/
+*.csv
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
