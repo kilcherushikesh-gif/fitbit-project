@@ -72,6 +72,19 @@ st.markdown(
         border-radius: 10px 10px 0 0;
         padding: 0.5rem 1rem;
     }
+    @media (max-width: 640px) {
+        .block-container {
+            padding: 1.25rem 1rem 2rem;
+        }
+        [data-testid="stMetric"] {
+            padding: 0.8rem;
+            border-radius: 14px;
+        }
+        .stTabs [role="tablist"] {
+            overflow-x: auto;
+            flex-wrap: nowrap;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -132,7 +145,7 @@ if page == "Dashboard":
         icon=":material/download:",
     )
 
-    a, b = st.columns(2)
+    a, b = st.columns(2, wrap=True)
     with a:
         st.markdown("<div class='section-header'>Steps by weekday</div>", unsafe_allow_html=True)
         weekday = (
@@ -164,7 +177,7 @@ if page == "Dashboard":
         ).interactive()
         st.altair_chart(scatter, width="stretch")
 
-    a, b = st.columns(2)
+    a, b = st.columns(2, wrap=True)
     with a:
         st.markdown("<div class='section-header'>Hourly activity pattern</div>", unsafe_allow_html=True)
         h = sql("SELECT hour_of_day, ROUND(AVG(steps),1) AS steps FROM hourly GROUP BY hour_of_day")
@@ -202,7 +215,7 @@ elif page == "SQL analysis":
     if st.button("Run", type="primary"):
         try:
             res = sql(query)
-            st.dataframe(res, use_container_width=True)
+            st.dataframe(res, width="stretch")
             num = res.select_dtypes("number").columns
             if len(res) > 1 and len(num) and len(res) <= 60:
                 st.bar_chart(res.set_index(res.columns[0])[num[0]])
@@ -216,5 +229,5 @@ elif page == "SQL analysis":
 else:
     st.title("Data cleaning (SQL)")
     st.markdown("Raw CSVs are loaded as `raw_*` tables, then `sql/01_cleaning.sql` builds the clean tables.")
-    st.dataframe(sql(named_queries()["Data quality summary"]), use_container_width=True)
+    st.dataframe(sql(named_queries()["Data quality summary"]), width="stretch")
     st.code((ROOT / "sql" / "01_cleaning.sql").read_text(), language="sql")
