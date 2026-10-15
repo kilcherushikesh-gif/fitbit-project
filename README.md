@@ -1,5 +1,7 @@
 # Fitbit analysis
 
+[Open the interactive Fitbit dashboard](https://fitbit-insight.streamlit.app/)
+
 1. `pip install -r requirements.txt`
 2. Put raw CSVs in `data_raw/` (already there), then `python build_db.py`
    -> creates `fitbit.db` and clean CSVs in `exports/`

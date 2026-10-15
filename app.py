@@ -1,23 +1,13 @@
 """Fitbit activity dashboard. Run:  python build_db.py  then  streamlit run app.py"""
 import re, sqlite3
 from pathlib import Path
-import pandas as pd, seaborn as sns
-import matplotlib.pyplot as plt
+import altair as alt
+import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).parent
 DB = ROOT / "fitbit.db"
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-sns.set_theme(style="whitegrid", rc={
-    "axes.facecolor": "#f7f9fc",
-    "figure.facecolor": "#f7f9fc",
-    "axes.edgecolor": "#dde6f1",
-    "grid.color": "#e9eef5",
-    "axes.labelcolor": "#30465c",
-    "xtick.color": "#30465c",
-    "ytick.color": "#30465c",
-    "text.color": "#30465c",
-})
 st.set_page_config(page_title="Fitbit Insights", page_icon="🏃", layout="wide")
 
 st.markdown(
@@ -128,26 +118,51 @@ if page == "Dashboard":
         df = df[(df.activity_date >= str(dates[0])) & (df.activity_date <= str(dates[1]))]
     if df.empty: st.warning("No data for this filter."); st.stop()
 
-    c = st.columns(5)
-    c[0].metric("Users", df.user_id.nunique())
-    c[1].metric("Avg steps / day", f"{df.total_steps.mean():,.0f}")
-    c[2].metric("Avg calories / day", f"{df.calories.mean():,.0f}")
-    c[3].metric("Sedentary hrs / day", f"{df.sedentary_min.mean()/60:.1f}")
-    c[4].metric("Avg sleep (h)", f"{df.minutes_asleep.mean()/60:.1f}" if df.minutes_asleep.notna().any() else "n/a")
+    with st.container(horizontal=True):
+        st.metric("Users", df.user_id.nunique(), border=True)
+        st.metric("Avg steps / day", f"{df.total_steps.mean():,.0f}", border=True)
+        st.metric("Avg calories / day", f"{df.calories.mean():,.0f}", border=True)
+        st.metric("Sedentary hrs / day", f"{df.sedentary_min.mean()/60:.1f}", border=True)
+        st.metric("Avg sleep (h)", f"{df.minutes_asleep.mean()/60:.1f}" if df.minutes_asleep.notna().any() else "n/a", border=True)
+    st.download_button(
+        "Download filtered data",
+        df.to_csv(index=False).encode("utf-8"),
+        "fitbit-filtered-activity.csv",
+        "text/csv",
+        icon=":material/download:",
+    )
 
     a, b = st.columns(2)
     with a:
         st.markdown("<div class='section-header'>Steps by weekday</div>", unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(6, 3.6))
-        sns.barplot(df, x="day_of_week", y="total_steps", order=DOW, errorbar=None, color="#4C78A8", ax=ax)
-        ax.axhline(10000, ls="--", color="grey"); ax.set_xlabel(""); ax.set_ylabel("Steps")
-        st.pyplot(fig)
+        weekday = (
+            df.assign(day_of_week=pd.Categorical(df.day_of_week, categories=DOW, ordered=True))
+            .groupby("day_of_week", observed=False).total_steps.mean()
+            .rename("avg_steps").reset_index()
+        )
+        bars = alt.Chart(weekday).mark_bar(color="#477B86", cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+            x=alt.X("day_of_week:N", title=None, sort=DOW),
+            y=alt.Y("avg_steps:Q", title="Average steps", scale=alt.Scale(zero=True)),
+            tooltip=[alt.Tooltip("day_of_week:N", title="Weekday"), alt.Tooltip("avg_steps:Q", title="Average steps", format=",.0f")],
+        )
+        target = alt.Chart(pd.DataFrame({"steps": [10000]})).mark_rule(color="#C75B39", strokeDash=[5, 4]).encode(
+            y=alt.Y("steps:Q")
+        )
+        st.altair_chart((bars + target).interactive(), width="stretch")
     with b:
         st.markdown("<div class='section-header'>Steps vs calories</div>", unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(6, 3.6))
-        sns.scatterplot(df, x="total_steps", y="calories", hue="activity_level", alpha=.7, ax=ax)
-        ax.legend(fontsize=7)
-        st.pyplot(fig)
+        scatter = alt.Chart(df).mark_circle(size=65, opacity=0.7).encode(
+            x=alt.X("total_steps:Q", title="Steps per day"),
+            y=alt.Y("calories:Q", title="Calories burned"),
+            color=alt.Color("activity_level:N", title="Activity level"),
+            tooltip=[
+                alt.Tooltip("user_id:N", title="User"),
+                alt.Tooltip("activity_date:T", title="Date"),
+                alt.Tooltip("total_steps:Q", title="Steps", format=",.0f"),
+                alt.Tooltip("calories:Q", title="Calories", format=",.0f"),
+            ],
+        ).interactive()
+        st.altair_chart(scatter, width="stretch")
 
     a, b = st.columns(2)
     with a:
@@ -159,10 +174,20 @@ if page == "Dashboard":
         s = df.dropna(subset=["minutes_asleep"])
         if s.empty: st.info("No sleep data for this selection.")
         else:
-            fig, ax = plt.subplots(figsize=(6, 3.6))
-            sns.scatterplot(s, x="minutes_asleep", y="total_steps", alpha=.6, ax=ax)
-            ax.axvline(420, ls="--", color="grey")
-            st.pyplot(fig)
+            sleep_scatter = alt.Chart(s).mark_circle(size=65, opacity=0.65).encode(
+                x=alt.X("minutes_asleep:Q", title="Minutes asleep"),
+                y=alt.Y("total_steps:Q", title="Steps that day"),
+                color=alt.Color("activity_level:N", title="Activity level"),
+                tooltip=[
+                    alt.Tooltip("user_id:N", title="User"),
+                    alt.Tooltip("minutes_asleep:Q", title="Minutes asleep", format=",.0f"),
+                    alt.Tooltip("total_steps:Q", title="Steps", format=",.0f"),
+                ],
+            )
+            seven_hours = alt.Chart(pd.DataFrame({"minutes_asleep": [420]})).mark_rule(
+                color="#C75B39", strokeDash=[5, 4]
+            ).encode(x="minutes_asleep:Q")
+            st.altair_chart((sleep_scatter + seven_hours).interactive(), width="stretch")
 
     st.markdown("<div class='section-header'>Heart rate by hour</div>", unsafe_allow_html=True)
     hr = sql("SELECT hour_of_day, ROUND(AVG(avg_bpm),1) AS avg_bpm FROM heartrate_hourly GROUP BY hour_of_day")
